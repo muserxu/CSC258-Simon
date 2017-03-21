@@ -1,6 +1,7 @@
 /*
-    Loads the pattern and shift the next color to compare.
-*/
+ * Loads the pattern and shift the next color to compare.
+ * The output is the shifted color.
+ */
 module pattern_shifter(
     input [3:0] pattern,
     input load_p,
