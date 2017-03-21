@@ -1,12 +1,12 @@
-module simon(SW, LEDR, KEY);
+module Simon(SW, LEDR, KEY);
     input SW[9:0];
     input KEY[3:0];
     output LEDR[9:0];
-    wire ld, next ,resetn, clk, show, match, cor;
+    wire ld, next ,resetn, clk, show, cor;
     wire [1:0] compare1, compare2;
     wire [3:0] out;
     reg [1:0] counter;
-
+	 reg match;
 
     assign resetn = ~KEY[2];
     assign clk = ~KEY[0];
@@ -64,12 +64,12 @@ module simon(SW, LEDR, KEY);
                .match(match));
 
 
-endmodule;
+endmodule
 
 module finish(clk, resetn, finish, counter, level);
     input clk, resetn;
     input [1:0] counter, level;
-    output finish;
+    output reg finish;
     always@(posedge clk) begin
         if (~resetn)
             finish <= 1'b0;
@@ -77,7 +77,7 @@ module finish(clk, resetn, finish, counter, level);
             if (counter == level)
                 finish <= 1'b1;
             else
-                finish <= 1'b0
+                finish <= 1'b0;
         end
     end
 endmodule
@@ -87,10 +87,10 @@ module comparator(in, clk, compare, resetn, enable, out);
     input [1:0] compare;
     input clk, enable, resetn;
     output reg out;
-    always (posedge clk)
-        if (~resetn)
-            compare <= 2'b0;
+    always @(posedge clk) begin
+        if (~resetn) begin
             out <= 1'b1;
+				end
         else if (enable) begin
             if (compare == in)
                 out <= 1'b1;
@@ -112,14 +112,14 @@ module pattern_shifter(
     reg [3:0] current_pattern;
 
     always @(posedge clk) begin
-        if (~resetn)
+        if (~resetn) begin
             current_pattern <= 4'b0;
-            result <= 1'b1;
+				end
         else if (load_p)
             current_pattern <= pattern;
         else if (next) begin
             compare[1:0] <= current_pattern[1:0];
-            current_pattern >> 2;
+            current_pattern <= current_pattern >> 2;
         end
     end
 endmodule
@@ -129,7 +129,7 @@ endmodule
 module show_color(
     input [1:0] color,
     input go,
-    output [3:0] out
+    output reg [3:0] out
     );
     
     // colors
@@ -150,6 +150,7 @@ module show_color(
             end
         else
             out[3:0] = 4'b0000;
+	end
 endmodule
 
 
@@ -175,14 +176,14 @@ module control(
                 S_COMPARE_WAIT   = 4'd5,
                 S_MATCH        = 4'd6,
                 S_WIN = 4'd7,
-                S_LOSE = 4'b8;
+                S_LOSE = 4'd8;
     
     // Next state logic aka our state table
     always@(*)
     begin: state_table 
             case (current_state)
                 S_LOAD: next_state = go ? S_LOAD_WAIT : S_LOAD; // Loop in current state until value is input
-                S_LOAD_A_WAIT: next_state = go ? S_LOAD_WAIT : S_SHOW; // Loop in current state until go signal goes low
+                S_LOAD_WAIT: next_state = go ? S_LOAD_WAIT : S_SHOW; // Loop in current state until go signal goes low
                 S_SHOW: next_state = go ? S_SHOW_WAIT : S_SHOW; // Loop in current state until value is input
                 S_SHOW_WAIT: next_state = go ? S_SHOW_WAIT : S_COMPARE; // Loop in current state until go signal goes low
                 S_COMPARE: next_state = go ? S_COMPARE_WAIT : S_COMPARE; // Loop in current state until value is input
@@ -213,7 +214,7 @@ module control(
                 show = 1'b1;
                 end
             S_COMPARE: begin
-                compare = 1'b1;
+                comp = 1'b1;
                 end
             S_MATCH: begin
                 match = 1'b1;
@@ -232,3 +233,4 @@ module control(
             current_state <= next_state;
     end // state_FFS
 endmodule
+
