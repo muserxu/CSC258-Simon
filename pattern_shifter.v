@@ -8,7 +8,8 @@ module pattern_shifter(
     input next,
     input resetn,
     input clk,
-    output reg [1:0] compare);
+    output reg [1:0] compare
+    );
     
     reg [3:0] current_pattern;
 
@@ -19,8 +20,8 @@ module pattern_shifter(
         else if (load_p)
             current_pattern <= pattern;
         else if (next) begin
-            compare <= current_pattern [1:0];
-            current_pattern << 2;
+            compare[1:0] <= current_pattern[1:0];
+            current_pattern >> 2;
         end
     end
 endmodule
