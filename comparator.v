@@ -3,8 +3,8 @@
 */
 
 module comparator(in, clk, compare, resetn, enable, out);
-	input [0:1] in;
-	input [0:1] compare;
+	input [1:0] in;
+	input [1:0] compare;
 	input clk, enable, resetn;
 	output reg [1:0] out;
 	always (posedge clk)
