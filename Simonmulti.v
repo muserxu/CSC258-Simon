@@ -1,4 +1,4 @@
-module Simon(SW, LEDR, KEY, HEX0, HEX1, HEX2);
+module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     input [9:0]SW;
     input [3:0]KEY;
     output [9:0]LEDR;
@@ -7,11 +7,12 @@ module Simon(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     wire [1:0] compare1, compare2;
     wire [3:0] out;
     reg [3:0] counter1, counter2, current_level;
-	 wire finish1, finish2, finish3;
+    wire finish1, finish2;
+    reg finish3;
 	 
 	 wire match;
 	 wire [1:0]level;
-     wire [3:0] current_state
+     wire [3:0] current_state;
 	 assign level = 2'b10;
 	 
 	
@@ -53,8 +54,10 @@ module Simon(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     end
 
     always@(posedge clk) begin
-        if (~resetn)
+        if (~resetn)begin
             current_level <= 1'b0;
+            finish3 <= 1'b0;
+            end
         else begin
             if (current_level == 3'd7)
                 finish3 <= 1'b1;
@@ -111,14 +114,14 @@ module Simon(SW, LEDR, KEY, HEX0, HEX1, HEX2);
                .resetn(resetn),
                .cor(cor),
                .finish1(finish1),
-				.finish2(finish2),
+		.finish2(finish2),
                 .finish3(finish3),
                .ld(ld),
                .show(show),
                .comp(comp),
                .match(match),
 				.reload(reload),
-                .current_state(current_state),
+                .current_state1(current_state),
                 .win_single(win_single),
                 .level_up(level_up));
 
@@ -127,8 +130,8 @@ endmodule
 
 module finish(clk, resetn, finish, counter, level);
     input clk, resetn;
-    input [3:0] counter,
-    input [1:0] level;
+    input [3:0] counter;
+    input [3:0] level;
     output reg finish;
     always@(posedge clk) begin
         if (~resetn)
@@ -258,8 +261,8 @@ module control(
 	input finish2,
     input finish3,
     
-    output reg  ld, show, comp, match, reload, win_single, level_up
-    output reg [3:0]current_state
+    output reg  ld, show, comp, match, reload, win_single, level_up,
+    output reg [3:0]current_state1
     );
 
     reg [3:0] current_state, next_state; 
@@ -273,7 +276,8 @@ module control(
                 S_MATCH        = 4'd6,
                 S_WIN_SINGLE = 4'd7,
                 S_LEVEL_UP = 4'd8,
-                S_LOSE = 4'd9;
+                S_WIN = 4'd9,
+                S_LOSE = 4'd10;
     
     // Next state logic aka our state table
     always@(*)
@@ -282,12 +286,12 @@ module control(
                 S_LOAD: next_state = S_SHOW ; // Loop in current state until value is input
                 S_SHOW: next_state =  S_SHOW_WAIT; // Loop in current state until value is input
                 S_SHOW_WAIT: next_state = finish1 ? S_RELOAD : S_SHOW; // Loop in current state until go signal goes low
-				S_RELOAD: next_state = S_COMPARE;
+		S_RELOAD: next_state = S_COMPARE;
                 S_COMPARE: next_state = S_COMPARE_WAIT  ; // Loop in current state until value is input
                 S_COMPARE_WAIT: next_state = cor ? S_MATCH : S_LOSE; // Loop in current state until go signal goes low
                 S_MATCH: next_state = finish2 ? S_WIN_SINGLE : S_COMPARE;
-                S_WIN_SINGLE: finish3? S_WIN: S_LEVEL_UP;
-                S_LEVEL_UP: S_SHOW;
+                S_WIN_SINGLE: next_state = finish3 ? S_WIN : S_LEVEL_UP;
+                S_LEVEL_UP: next_state = S_SHOW;
                 S_WIN: next_state = S_LOAD;
                 S_LOSE: next_state = S_LOAD;
             default:     next_state = S_LOAD;
@@ -312,21 +316,21 @@ module control(
         case (current_state)
             S_LOAD: begin
                 ld = 1'b1;
-                current_state = 4'd1;
+                current_state1 = 4'd1;
                 end
             S_SHOW: begin
                 ld = 1'b0;
                 show = 1'b1;
                 level_up = 1'b0;
-                current_state = 4'd2;
+                current_state1 = 4'd2;
                 end
 			S_SHOW_WAIT: begin
                 show = 1'b0;
-                current_state = 4'd3;
+                current_state1 = 4'd3;
                 end
 			S_RELOAD: begin
 				reload = 1'b1;
-                current_state = 4'd4;
+                current_state1 = 4'd4;
 				end
 					
             S_COMPARE: begin
@@ -334,30 +338,30 @@ module control(
                 comp = 1'b1;
                 match = 1'b0;
 
-                current_state = 4'd5;
+                current_state1 = 4'd5;
                 end
 			S_COMPARE_WAIT: begin
                 comp = 1'b0;
-                current_state = 4'd6;
+                current_state1 = 4'd6;
                 end
             S_MATCH: begin
                 match = 1'b1;
-                current_state = 4'd7;
+                current_state1 = 4'd7;
                 end
             S_WIN_SINGLE: begin
                 win_single = 1'b1;
-                current_state = 4'd8;
+                current_state1 = 4'd8;
                 end
             S_LEVEL_UP: begin
                 win_single = 1'b0;
                 level_up = 1'b1;
-                current_state = 4'd9;
+                current_state1 = 4'd9;
                 end
             S_WIN: begin
-                current_state = 4'd10;
+                current_state1 = 4'd10;
                 end
             S_LOSE: begin
-                current_state = 4'd11;
+                current_state1 = 4'd11;
                 end
 
             
