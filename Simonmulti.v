@@ -6,10 +6,13 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     wire ld, next ,resetn, clk, show, cor, reload, level_up, win_single;
     wire [1:0] compare1, compare2;
     wire [3:0] out;
-    reg [3:0] counter1, counter2, current_level;
-    wire finish1, finish2;
+    reg [3:0] counter_match, counter_show, current_level;
+    wire finish1, finish_match;
     reg finish3;
 	 
+     wire [1:0]cur_colour;
+
+
 	 wire match;
 	 wire [1:0]level;
      wire [3:0] current_state;
@@ -25,21 +28,25 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     always @(posedge clk) begin
         if (~resetn) begin
  
-            counter1 <= 4'b0;
+            counter_match <= 4'b0;
         end
         else begin
             if (match)
-                counter1 <= counter1 + 1'd1;
+                counter_match <= counter_match + 1'd1;
+            else if (win_single)
+                counter_match <= 4'b0;
         end
     end
 
 	 always @(posedge clk) begin
         if (~resetn) begin
-            counter2 <= 4'b0;
+            counter_show <= 4'b0;
         end
         else begin
             if (show)
-                counter2 <= counter2 + 1'd1;
+                counter_show <= counter_show + 1'd1;
+            else if(reload)
+                counter_show <= 4'b0;
         end
     end
 
@@ -67,6 +74,20 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     end
 
 
+    reg [2:0]address;
+    always@ (posedge clk) begin
+        if (~resetn)
+            address <= 3'b0;
+        else begin
+        if (show)
+            address <= counter_show
+        else if (match)
+            address <= counter_match
+        else if (ld)
+            address <= addr
+            end
+        end
+
 
     hex_decoder h0(.hex_digit(current_state), .segments(HEX0));
     hex_decoder h1(.hex_digit(counter1), .segments(HEX1));
@@ -74,37 +95,58 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
 	 
     finish f0(.clk(clk),
               .resetn(resetn),
-              .counter(counter1),
+              .counter(counter_match),
               .level(current_level),
-              .finish(finish1));
+              .finish(finish_match));
 	 
 	 finish f1(.clk(clk),
               .resetn(resetn),
-              .counter(counter2),
+              .counter(counter_show),
               .level(current_level),
-              .finish(finish2));
+              .finish(finish_show));
 
     
 	
-	assign LEDR[8] = finish2;
+	assign LEDR[8] = finish_match;
+
+    rng r0(
+    .clk(clk),
+    .reset(resetn),
+    .out(cur_colour)
+    );
+
+    wire [2:0] addr;
+    wire [1:0] colour_out;
+    wire write_en;
+    wire [1:0]out_led;
+    wire finish_load;
+
+    level_loader l0(
+    .color_in(cur_colour),
+    .reset(resetn),
+    .clk(clk),
+    .addr(addr),
+    .color_out(colour_out),
+    .write(write_en),
+    .finish_load(finish_load)
+    );
+
+    //should connect address to multiplexier 
+    eeprom e0(.address(address),
+            .data_in(colour_out),
+            .write_en(write_en),
+            .out(out_led))
 
 
-    pattern_shifter p0(.pattern(SW[3:0]),
-                       .load_p(ld),
-                       .resetn(resetn),
-							  .reload(reload),
-							  .enable(show),
-                       .clk(clk),
-                       .compare(compare1));
 
-    show_color s0(.color(compare1),
+    show_color s0(.color(out_led),
                   .go(show),
                   .out(out));
 
 
 
     comparator c0(.in(SW[9:8]),
-                  .compare(compare1),
+                  .compare(out_led),
                   .clk(clk),
                   .enable(comp),
                   .resetn(resetn),
@@ -113,8 +155,8 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     control C0(.clk(clk),
                .resetn(resetn),
                .cor(cor),
-               .finish1(finish1),
-		.finish2(finish2),
+               .finish_show(finish_show),
+		      .finish_match(finish_match),
                 .finish3(finish3),
                .ld(ld),
                .show(show),
@@ -123,7 +165,8 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
 				.reload(reload),
                 .current_state1(current_state),
                 .win_single(win_single),
-                .level_up(level_up));
+                .level_up(level_up),
+                .finish_load(finish_load));
 
 
 endmodule
@@ -165,41 +208,6 @@ module comparator(in, clk, compare, resetn, enable, out);
     end
 endmodule
 
-module pattern_shifter(
-    input [3:0] pattern,
-    input load_p,
-	 input enable,
-	 input reload,
-    input resetn,
-    input clk,
-    output reg [1:0] compare
-    );
-    
-    reg [3:0] current_pattern, initial_pattern;
-
-    always @(posedge clk) begin
-        if (~resetn) begin
-            current_pattern <= 4'b0;
-				initial_pattern <= 4'b0;
-				end
-        else begin 
-			  if (load_p) begin
-					current_pattern <= pattern;
-					initial_pattern <= pattern;
-					end
-			  else begin
-					if (reload)
-						current_pattern <= initial_pattern;
-					else begin
-					if (enable) begin
-					   compare[1:0] <= current_pattern[1:0];
-					   current_pattern <= (current_pattern >> 2);
-					end
-					end
-        end
-		  end 
-    end
-endmodule
 
 
 module show_color(
@@ -257,8 +265,9 @@ module control(
     input clk,
     input resetn,
     input cor,
-    input finish1,
-	input finish2,
+    input finish_load;
+    input finish_show,
+	input finish_match,
     input finish3,
     
     output reg  ld, show, comp, match, reload, win_single, level_up,
@@ -278,18 +287,22 @@ module control(
                 S_LEVEL_UP = 4'd8,
                 S_WIN = 4'd9,
                 S_LOSE = 4'd10;
+                S_START = 4'd11;
+                S_LOAD_WAIT = 4'd12;
     
     // Next state logic aka our state table
     always@(*)
     begin: state_table 
             case (current_state)
-                S_LOAD: next_state = S_SHOW ; // Loop in current state until value is input
+                S_START: next_state = S_LOAD;
+                S_LOAD: next_state = S_LOAD_WAIT; 
+                S_LOAD_WAIT = finish_load ? S_SHOW;
                 S_SHOW: next_state =  S_SHOW_WAIT; // Loop in current state until value is input
-                S_SHOW_WAIT: next_state = finish1 ? S_RELOAD : S_SHOW; // Loop in current state until go signal goes low
-		S_RELOAD: next_state = S_COMPARE;
+                S_SHOW_WAIT: next_state = finish_show ? S_RELOAD : S_SHOW; // Loop in current state until go signal goes low
+		        S_RELOAD: next_state = S_COMPARE;
                 S_COMPARE: next_state = S_COMPARE_WAIT  ; // Loop in current state until value is input
                 S_COMPARE_WAIT: next_state = cor ? S_MATCH : S_LOSE; // Loop in current state until go signal goes low
-                S_MATCH: next_state = finish2 ? S_WIN_SINGLE : S_COMPARE;
+                S_MATCH: next_state = finish_match ? S_WIN_SINGLE : S_COMPARE;
                 S_WIN_SINGLE: next_state = finish3 ? S_WIN : S_LEVEL_UP;
                 S_LEVEL_UP: next_state = S_SHOW;
                 S_WIN: next_state = S_LOAD;
@@ -314,12 +327,17 @@ module control(
  
 
         case (current_state)
+            S_START: begin
+                current_state1 = 4'd0;
+                end
             S_LOAD: begin
                 ld = 1'b1;
                 current_state1 = 4'd1;
                 end
-            S_SHOW: begin
+            S_LOAD_WAIT: begin
                 ld = 1'b0;
+                end
+            S_SHOW: begin
                 show = 1'b1;
                 level_up = 1'b0;
                 current_state1 = 4'd2;
@@ -404,4 +422,81 @@ module hex_decoder(hex_digit, segments);
         endcase
 endmodule
 
+ module eeprom(
+    input [2:0] address,
+    input [1:0] data_in,
+    input write_en,
+    output reg[1:0] out
+    );
+    
+    // WORD_WIDTH is the number of bits we need to represent a color.
+    // ADDR_WIDTH is the number of addresses (levels).
+    parameter WORD_WIDTH = 2,
+              ADDR_WIDTH = 8;
+    
+    reg [WORD_WIDTH -1 :0] data [ADDR_WIDTH - 1:0];
+    
+    wire [2:0] addr;
+    assign addr = address;
+    
+    always @(*) begin
+        if (!write_en)
+            out = data[addr];
+        else begin
+            data[addr] = data_in;
+        end
+    end
+endmodule
+
+module rng(
+    input clk,
+    input reset,
+    output [1:0] out
+    );
+    
+    reg [15:0] value = 16'd13680;
+    
+    assign out = value[15:14];
+     
+    always @(posedge clk) begin
+        value <= {value[14:0], value[12] ^ value[7]};
+    end
+endmodule
+
+module level_loader(
+    input [1:0] color_in,
+    input reset,
+    input clk,
+    output reg [2:0] addr,
+    output reg [1:0] color_out,
+    output reg write,
+    output reg finish_load
+    );
+    
+    localparam MAX_LEVEL = 4'd8;
+    
+    assign w = 3'd2;
+    
+    always @(posedge clk) begin
+        if (~reset) begin
+            addr <= 3'b0;
+            write <= 1'b0;
+            finish_load <= 1'b0;
+        end
+        else begin
+            if (addr < MAX_LEVEL) begin
+                color_out <= color_in;
+                write <= 1'b1;
+                addr <= addr + 1'b1;
+            end
+            else begin
+                finish_load <= 1'b1;
+                end
+        end
+    end
+    
+    always @(negedge clk) begin
+        write <= 1'b0;
+    end
+endmodule
 
