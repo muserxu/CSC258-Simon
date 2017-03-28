@@ -18,6 +18,12 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
      wire [3:0] current_state;
 	 assign level = 2'b10;
 	 
+	 wire [2:0] addr;
+    wire [1:0] colour_out;
+    wire write_en;
+    wire [1:0]out_led;
+    wire finish_load;
+	 
 	
 	 assign LEDR[3:0] = out [3:0];
 	 assign LEDR[9] = cor;
@@ -80,11 +86,11 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
             address <= 3'b0;
         else begin
         if (show)
-            address <= counter_show
+            address <= counter_show;
         else if (match)
-            address <= counter_match
+            address <= counter_match;
         else if (ld)
-            address <= addr
+            address <= addr;
             end
         end
 
@@ -115,11 +121,7 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     .out(cur_colour)
     );
 
-    wire [2:0] addr;
-    wire [1:0] colour_out;
-    wire write_en;
-    wire [1:0]out_led;
-    wire finish_load;
+    
 
     level_loader l0(
     .color_in(cur_colour),
@@ -135,7 +137,7 @@ module Simonmulti(SW, LEDR, KEY, HEX0, HEX1, HEX2);
     eeprom e0(.address(address),
             .data_in(colour_out),
             .write_en(write_en),
-            .out(out_led))
+            .out(out_led));
 
 
 
@@ -265,7 +267,7 @@ module control(
     input clk,
     input resetn,
     input cor,
-    input finish_load;
+    input finish_load,
     input finish_show,
 	input finish_match,
     input finish3,
@@ -286,8 +288,8 @@ module control(
                 S_WIN_SINGLE = 4'd7,
                 S_LEVEL_UP = 4'd8,
                 S_WIN = 4'd9,
-                S_LOSE = 4'd10;
-                S_START = 4'd11;
+                S_LOSE = 4'd10,
+                S_START = 4'd11,
                 S_LOAD_WAIT = 4'd12;
     
     // Next state logic aka our state table
@@ -296,7 +298,7 @@ module control(
             case (current_state)
                 S_START: next_state = S_LOAD;
                 S_LOAD: next_state = S_LOAD_WAIT; 
-                S_LOAD_WAIT = finish_load ? S_SHOW;
+                S_LOAD_WAIT: next_state = finish_load ? S_SHOW : S_LOAD_WAIT;
                 S_SHOW: next_state =  S_SHOW_WAIT; // Loop in current state until value is input
                 S_SHOW_WAIT: next_state = finish_show ? S_RELOAD : S_SHOW; // Loop in current state until go signal goes low
 		        S_RELOAD: next_state = S_COMPARE;
